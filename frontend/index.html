@@ -56,6 +56,19 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .office-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .office-actions button{padding:10px 12px;border-radius:9px;background:#1e3656;border:1px solid #47658a;color:#fff;cursor:pointer}
 @media(max-width:850px){.office-actions button{flex:1}}
+
+/* V7.2 Option A: interactive six-desk live office scene */
+.office{min-height:770px;background-image:linear-gradient(180deg,rgba(8,14,24,.12),rgba(8,14,24,.1)),url('office-background.png');background-size:100% 100%;background-position:center;background-repeat:no-repeat;border-color:#a38b5c;box-shadow:0 16px 55px #0006}
+.office:before{background:linear-gradient(180deg,rgba(4,8,16,.35),transparent 25%,transparent 76%,rgba(4,8,16,.28))}
+.office-title{top:12px;left:14px;background:rgba(10,17,30,.9);border:1px solid #bb9d5b}
+.staff{width:27%;min-height:108px;padding:9px 12px;border:1px solid rgba(255,222,154,.75);border-radius:12px;background:rgba(9,14,27,.91);box-shadow:0 8px 28px #000b;z-index:2}
+.staff .name{font-size:13px}.staff .role{font-size:10px}.staff .mini{font-size:10px}.staff .config-btn{display:inline-block;margin-top:5px}
+.staff.vacant{border:2px dashed #ffe4a0;background:rgba(18,23,35,.92)}
+.s1{left:3%;top:43%}.s2{left:36.5%;top:43%}.s3{left:70%;top:43%}
+.s4{left:3%;top:79%}.s5{left:36.5%;top:79%}.s6{left:70%;top:79%}
+.ceo-panel{right:12px;top:10px;width:185px;background:rgba(10,16,28,.92)}
+.office-legend{border-left:3px solid #d7b56b;padding-left:10px}
+@media(max-width:850px){.office{min-height:950px;background-size:cover;background-position:center}.staff{width:43%;min-height:115px}.s1{left:4%;top:22%}.s2{left:53%;top:22%}.s3{left:4%;top:42%}.s4{left:53%;top:42%}.s5{left:4%;top:63%}.s6{left:53%;top:63%}.ceo-panel{top:8px;right:8px;width:175px}.office-title{max-width:45%}}
 </style></head>
 <body>
 <div class="app">
@@ -83,10 +96,10 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 <button class="nav" data-page="legacy" onclick="navigate('legacy')">♛ &nbsp; Family Succession</button>
 <div class="ceo">♛ &nbsp; CEO MODE<br><small>Owner access · Approval required</small></div></aside>
 <main class="main"><div class="top"><div><h1>Good morning, CEO.</h1><div class="sub">Your office at a glance. Select a staff member to observe or instruct.</div></div><div class="online">● OFFICE ONLINE</div></div>
-<div id="officePage"><div class="office-actions"><button onclick="v7Hub()">✦ V7 Executive HQ</button><button onclick="v7Boardroom()">♙ Boardroom</button><button onclick="v7Library()">▤ Knowledge Library</button><button onclick="openWalkthrough()">◉ CEO Walkthrough</button><button onclick="showExecutiveBriefing()">▤ Executive Briefing</button><button onclick="showApprovalDesk()">✓ CEO Approval Desk</button><button onclick="openModal('team')">⚙ Manage Staff</button></div><section class="office"><div class="office-title"><strong>AI Private Office</strong><span>Virtual office floor · Team workspace</span></div>
+<div id="officePage"><div class="office-actions"><button onclick="v7Hub()">✦ V7 Executive HQ</button><button onclick="v7Boardroom()">♙ Boardroom</button><button onclick="v7Library()">▤ Knowledge Library</button><button onclick="openWalkthrough()">◉ CEO Walkthrough</button><button onclick="showExecutiveBriefing()">▤ Executive Briefing</button><button onclick="showApprovalDesk()">✓ CEO Approval Desk</button><button onclick="openModal('team')">⚙ Manage Staff</button></div><section class="office"><div class="office-title"><strong>AI Private Office · Live Desk View</strong><span>Option A · Interactive six-desk live office</span></div>
 <div class="staff-layer" id="staffLayer"></div>
 <div class="ceo-panel"><h3>CEO CONTROL</h3><button class="action" onclick="openModal('observe')">◉ &nbsp; What can I observe?</button><button class="action" onclick="openModal('instruction')">✉ &nbsp; Give an instruction</button><button class="action" onclick="openModal('team')">＋ &nbsp; Add / manage staff</button><button class="action" onclick="showReports()">▤ &nbsp; Team progress report</button></div></section>
-<div class="office-legend" id="seatLegend">● Occupied = staff assigned · ◇ Vacant = available desk · AI activity is shown only during actual requests.</div><div id="expansionSeats" class="expansion-seats" hidden></div>
+<div class="office-legend" id="seatLegend">● Occupied = staff assigned · ◇ Vacant = available desk · Live status comes from backend AI jobs after CEO login.</div><div id="expansionSeats" class="expansion-seats" hidden></div>
 <div id="walkthroughPanel" class="walkthrough" hidden></div>
 <section class="bottom"><div class="panel"><h3>Office overview</h3><div class="metrics"><div class="metric"><b id="staffCount">6</b><span>AI employees</span></div><div class="metric"><b id="workingCount">4</b><span>Working now</span></div><div class="metric"><b>3</b><span>Active projects</span></div></div><div class="hint">Task counts reflect this browser’s saved records. A staff is actively processing AI work only while an engine request is running in this open session; other progress is CEO-entered.</div></div>
 <div class="panel"><h3>Recent office activity</h3><div class="activity" id="activity"></div></div></section>
@@ -107,7 +120,31 @@ let tasks=Array.isArray(saved?.tasks)?saved.tasks:[];
 let activity=Array.isArray(saved?.activity)?saved.activity:[];
 let tab='progress';
 let attachments={}; // Browser session only: files are not persisted or uploaded.
-const activeEngineRuns=new Set(); // Actual in-flight AI requests, never fabricated.
+const activeEngineRuns=new Set(); // Real server-side queued/working AI jobs only.
+let liveJobs=[];
+async function refreshLiveJobs(){
+ if(!engineToken)return;
+ try{
+  const r=await fetch('/api/jobs',{headers:{Authorization:'Bearer '+engineToken},cache:'no-store'});
+  if(r.status===401){engineToken='';liveJobs=[];activeEngineRuns.clear();renderAll();return}
+  if(!r.ok)return;
+  liveJobs=await r.json();activeEngineRuns.clear();
+  liveJobs.filter(j=>j.status==='queued'||j.status==='working').forEach(j=>activeEngineRuns.add(String(j.task_id)));
+  for(const j of liveJobs){
+   if(j.status!=='awaiting_ceo'||!j.draft)continue;
+   const t=tasks.find(x=>String(x.id)===String(j.task_id));
+   if(t&&t.status==='progress'&&t.aiJobId===j.id){
+    t.draft=j.draft;t.status='draft';t.progress=100;save();addActivity('AI draft ready for CEO review: '+t.title);
+   }
+  }
+  renderAll();
+ }catch(e){}
+}
+setInterval(refreshLiveJobs,4000);
+function showLiveJobs(){
+ const rows=liveJobs.slice(0,30).map(j=>`<div class="desk-details"><b>${esc(j.staff_name)} · ${esc(j.title)}</b><p>${esc(j.status.replaceAll('_',' '))}</p>${j.error?`<p class="danger">${esc(j.error)}</p>`:''}</div>`).join('');
+ openBox('Live AI Job Monitor',`<p class="sub">Actual backend jobs, refreshed every 4 seconds while CEO is logged in. No external actions; drafts require CEO approval.</p>${rows||'<p>No backend jobs yet. Queue a draft from a task.</p>'}<button class="secondary" onclick="refreshLiveJobs()">Refresh</button>`);
+}
 let selectedDeskIndex=0;
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -118,9 +155,9 @@ function renderActivity(){$('activity').innerHTML=activity.slice(0,6).map(a=>`<d
 function deskState(person){
  const own=tasks.filter(t=>t.assignee===person.id),active=own.filter(t=>t.status==='progress'),review=own.filter(t=>t.status==='draft');
  const running=own.some(t=>activeEngineRuns.has(String(t.id)));
- return {own,active,review,running,label:running?'AI processing':review.length?'Awaiting CEO':active.length?'Assigned · not running':'Available',pct:active.length?Math.round(active.reduce((n,t)=>n+(Number(t.progress)||0),0)/active.length):0};
+ return {own,active,review,running,label:running?'AI queued / working':review.length?'Awaiting CEO':active.length?'Assigned · not running':'Available',pct:active.length?Math.round(active.reduce((n,t)=>n+(Number(t.progress)||0),0)/active.length):0};
 }
-// Fixed six positions in the original office image; extra employees use a separate expansion area.
+// Six clickable positions in the V7.2 live office scene; extra employees use a separate expansion area.
 // Each staff retains its assigned seat number in browser storage; new staff fill vacant seats first.
 const OFFICE_DESKS=6;
 function seatOf(person,index){return Number.isInteger(person.seat)&&person.seat>=0?person.seat:index}
@@ -131,7 +168,7 @@ function renderStaff(){
  normalizeSeats();const bySeat=new Map(staff.map(person=>[person.seat,person]));
  $('staffLayer').innerHTML=Array.from({length:OFFICE_DESKS},(_,seat)=>bySeat.has(seat)?occupiedSeatMarkup(bySeat.get(seat),seat):vacantSeatMarkup(seat)).join('');
  const expansion=$('expansionSeats');const highSeats=staff.filter(s=>s.seat>=OFFICE_DESKS).map(s=>s.seat);const last=Math.max(OFFICE_DESKS-1,...highSeats);
- if(last>=OFFICE_DESKS){expansion.hidden=false;expansion.innerHTML=`<h3>Expansion Workstations</h3><p class="sub">Additional desks are shown here because the original office image has six mapped positions.</p><div class="expansion-grid">${Array.from({length:last-OFFICE_DESKS+2},(_,i)=>{let seat=i+OFFICE_DESKS;return bySeat.has(seat)?occupiedSeatMarkup(bySeat.get(seat),seat,true):vacantSeatMarkup(seat,true)}).join('')}</div>`}else{expansion.hidden=true;expansion.innerHTML=''}
+ if(last>=OFFICE_DESKS){expansion.hidden=false;expansion.innerHTML=`<h3>Expansion Workstations</h3><p class="sub">Additional desks appear here when all six visual workstations are assigned.</p><div class="expansion-grid">${Array.from({length:last-OFFICE_DESKS+2},(_,i)=>{let seat=i+OFFICE_DESKS;return bySeat.has(seat)?occupiedSeatMarkup(bySeat.get(seat),seat,true):vacantSeatMarkup(seat,true)}).join('')}</div>`}else{expansion.hidden=true;expansion.innerHTML=''}
  $('staffCount').textContent=staff.length;
  $('workingCount').textContent=activeEngineRuns.size;
  const w=$('walkthroughPanel');if(w&&!w.hidden)renderWalkthrough();
@@ -172,7 +209,7 @@ function addStaff(){let n=$('newName').value.trim(),r=$('newRole').value.trim();
 function sendInstruction(){let title=$('taskTitle').value.trim(),instruction=$('instructionText').value.trim();if(!title||!instruction)return alert('Task title and instruction are required.');let ids=$('target').value==='all'?staff.map(s=>s.id):[Number($('target').value)];let fileList=Array.from($('instructionFiles').files);let batch=Date.now();ids.forEach((id,i)=>{let taskId=batch+i;tasks.unshift({id:taskId,assignee:id,title,instruction,priority:$('priority').value,deadline:$('deadline').value,status:'progress',progress:0,created:new Date().toISOString(),draft:'',final:'',fileNames:fileList.map(f=>f.name)});if(fileList.length)attachments[taskId]=fileList});save();renderAll();addActivity('CEO created '+ids.length+' task(s): '+title);closeModal();switchTab('progress')}
 function switchTab(t){tab=t;document.querySelectorAll('.tab[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));renderTasks();document.querySelector('.workspace').scrollIntoView({behavior:'smooth',block:'start'})}
 function renderTasks(){let relevant=tasks.filter(t=>t.status===tab);$('taskArea').innerHTML=`<div class="taskgrid">${relevant.map(t=>{let s=staff.find(x=>x.id===t.assignee);let late=t.deadline&&t.deadline<new Date().toISOString().slice(0,10)&&t.status!=='final';return `<div class="taskcard"><span class="pill">${esc(t.priority)}</span> <span class="pill">${esc(t.status==='progress'?'In progress':t.status==='draft'?'Awaiting CEO approval':'Approved')}</span><h4>${esc(t.title)}</h4><p>${esc(s?.name||'Unknown staff')} · ${esc(s?.role||'')}</p><p class="${late?'danger':''}">Deadline: ${fmt(t.deadline)}${late?' · OVERDUE':''}</p>${tab==='progress'?`<div class="bar"><i style="width:${t.progress}%"></i></div><p>${t.progress}% completed</p>`:''}${t.fileNames?.length?`<div class="files">📎 ${t.fileNames.map(esc).join(', ')}</div>`:''}<div class="inlineactions"><button class="secondary" onclick="taskDetails(${t.id})">${tab==='draft'?'Review Draft':tab==='final'?'View / Download':'Manage Task'}</button></div></div>`}).join('')}</div>${!relevant.length?'<div class="empty">No tasks in this stage yet. Create a CEO instruction to get started.</div>':''}`}
-function taskDetails(id){let t=tasks.find(x=>x.id===id);if(!t)return;let s=staff.find(x=>x.id===t.assignee);let files=attachments[id]||[];let fileList=(t.fileNames||[]).map((name,i)=>`<div class="files">📎 ${esc(name)} ${files[i]?`<button class="secondary" onclick="downloadAttachment(${id},${i})">Download attachment</button>`:'<span class="mini">(re-attach after refresh)</span>'}</div>`).join('');let common=`<p class="sub">Assigned to ${esc(s?.name||'Unknown')} · ${esc(t.priority)} priority</p><p><b>CEO instruction:</b> ${esc(t.instruction)}</p>${input('Deadline','editDeadline',t.deadline,'date')}<button class="secondary" onclick="changeDeadline(${id})">Save deadline</button>${fileList}`;let stage='';if(t.status==='progress')stage=`${input('Work progress (%)','editProgress',t.progress,'number')}${area('Draft result / submission','draftResult',t.draft)}<div class="field"><label>Optional draft deliverable file</label><input type="file" id="deliverable"></div><div class="inlineactions"><button class="secondary" onclick="updateProgress(${id})">Update progress</button><button class="primary" onclick="submitDraft(${id})">Submit Draft for CEO Approval</button><button class="secondary" onclick="runAIDraft(${id})">✦ Generate AI Draft (Engine)</button></div><p class="hint">In demo mode, task progress and draft submissions are manually simulated.</p>`;
+function taskDetails(id){let t=tasks.find(x=>x.id===id);if(!t)return;let s=staff.find(x=>x.id===t.assignee);let files=attachments[id]||[];let fileList=(t.fileNames||[]).map((name,i)=>`<div class="files">📎 ${esc(name)} ${files[i]?`<button class="secondary" onclick="downloadAttachment(${id},${i})">Download attachment</button>`:'<span class="mini">(re-attach after refresh)</span>'}</div>`).join('');let common=`<p class="sub">Assigned to ${esc(s?.name||'Unknown')} · ${esc(t.priority)} priority</p><p><b>CEO instruction:</b> ${esc(t.instruction)}</p>${input('Deadline','editDeadline',t.deadline,'date')}<button class="secondary" onclick="changeDeadline(${id})">Save deadline</button>${fileList}`;let stage='';if(t.status==='progress')stage=`${input('Work progress (%)','editProgress',t.progress,'number')}${area('Draft result / submission','draftResult',t.draft)}<div class="field"><label>Optional draft deliverable file</label><input type="file" id="deliverable"></div><div class="inlineactions"><button class="secondary" onclick="updateProgress(${id})">Update progress</button><button class="primary" onclick="submitDraft(${id})">Submit Draft for CEO Approval</button><button class="secondary" onclick="runAIDraft(${id})">✦ Queue AI Draft (Live)</button></div><p class="hint">In demo mode, task progress and draft submissions are manually simulated.</p>`;
 if(t.status==='draft')stage=`<h3>Draft for CEO approval</h3><div class="taskcard">${esc(t.draft||'No written draft')}</div>${t.draftFileName?`<p>📎 ${esc(t.draftFileName)} <button class="secondary" onclick="downloadDeliverable(${id},'draft')">Download draft file</button></p>`:''}${area('CEO revision notes','revisionNotes',t.revisionNotes||'')}<div class="inlineactions"><button class="secondary" onclick="requestRevision(${id})">Request Changes</button><button class="primary" onclick="approveDraft(${id})">✓ Approve Final Task</button></div>`;
 if(t.status==='final')stage=`<h3>Approved final deliverable</h3><div class="taskcard">${esc(t.final||'Approved file deliverable')}</div><p class="mini">Approved: ${esc(t.approvedAt?new Date(t.approvedAt).toLocaleString():'')}</p><div class="inlineactions"><button class="primary" onclick="downloadFinal(${id})">↓ Download Final Result (.txt)</button>${t.finalFileName?`<button class="secondary" onclick="downloadDeliverable(${id},'final')">↓ Download Attached File</button>`:''}</div>`;
 openBox(t.title,common+stage)}
@@ -252,22 +289,22 @@ async function engineLogin(){
  const pw=prompt('CEO backend password (not saved):'); if(!pw)return false;
  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
  if(!r.ok){alert('Backend login failed');return false}
- engineToken=(await r.json()).token;return true;
+ engineToken=(await r.json()).token;refreshLiveJobs();return true;
 }
 async function runAIDraft(id){
  const task=tasks.find(x=>x.id===id),person=staff.find(x=>x.id===task?.assignee);
  if(!task||!person)return;
  if(!engineToken&&!(await engineLogin()))return;
  if(activeEngineRuns.has(String(id)))return alert('This task is already processing.');
- activeEngineRuns.add(String(id));renderAll();
  const payload={task_id:String(task.id),title:task.title,instruction:task.instruction,staff_name:person.name,staff_role:person.role,staff_description:person.description||'',staff_config:person.config||{}};
  try{
-  const req=()=>fetch('/api/engine/draft',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+engineToken},body:JSON.stringify(payload)});
-  let r=await req();if(r.status===401){engineToken='';if(!(await engineLogin()))return;r=await req()}
-  if(!r.ok){let e=await r.json().catch(()=>({detail:'Server unavailable'}));throw Error(typeof e.detail==='string'?e.detail:'Request failed')}
-  const out=await r.json();task.draft=out.draft;task.progress=100;task.status='draft';save();renderAll();addActivity('AI generated draft for CEO review: '+task.title);closeModal();switchTab('draft');
- }catch(e){alert('AI engine: '+e.message+'\nStart the backend server and configure OPENAI_API_KEY.')} 
- finally{activeEngineRuns.delete(String(id));renderAll()}
+  let r=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+engineToken},body:JSON.stringify(payload)});
+  if(r.status===401){engineToken='';if(!(await engineLogin()))return;r=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+engineToken},body:JSON.stringify(payload)})}
+  if(!r.ok){let e=await r.json().catch(()=>({}));throw Error(typeof e.detail==='string'?e.detail:'Could not queue job')}
+  const j=await r.json();task.aiJobId=j.id;save();activeEngineRuns.add(String(id));renderAll();
+  addActivity('Queued real AI draft job: '+task.title);closeModal();await refreshLiveJobs();
+  alert('AI job queued. Its real status updates every 4 seconds while this page is open. Draft will await CEO approval.');
+ }catch(e){alert('AI job: '+e.message)}
 }
 
 // V7 executive modules: all records here are browser-local. No background agents or external app permissions.
@@ -276,7 +313,7 @@ let v7={library:[],meetings:[],messages:[],policies:{approval:'All external acti
 try{const loaded=JSON.parse(localStorage.getItem(v7Key));if(loaded&&typeof loaded==='object')v7={...v7,...loaded}}catch(e){}
 function v7Save(){localStorage.setItem(v7Key,JSON.stringify(v7))}
 function v7Card(title,body){return `<div class="v5-card"><h3>${title}</h3>${body}</div>`}
-function v7Hub(){let pending=tasks.filter(t=>t.status==='draft'),active=tasks.filter(t=>t.status==='progress');let overdue=active.filter(t=>t.deadline&&t.deadline<new Date().toISOString().slice(0,10));openBox('V7 · CEO Executive Headquarters',`<div class="config-note">Real records from this browser only. No staff runs autonomously in the background. AI calls require CEO login and use OpenAI API credits.</div><div class="v5-kpis">${v7Card('Assigned tasks',`<b>${tasks.length}</b>`)}${v7Card('CEO approvals',`<b>${pending.length}</b>`)}${v7Card('Overdue',`<b>${overdue.length}</b>`)}${v7Card('Staff',`<b>${staff.length}</b>`)}</div><div class="inlineactions"><button class="primary" onclick="v7Boardroom()">♙ Executive Boardroom</button><button class="secondary" onclick="v7Library()">▤ Knowledge Library</button><button class="secondary" onclick="v7Messages()">✉ Staff Messenger</button><button class="secondary" onclick="v7Performance()">▥ Performance</button><button class="secondary" onclick="v7Governance()">⚙ Governance & Backup</button><button class="secondary" onclick="showApprovalDesk()">✓ Approval Desk</button><button class="secondary" onclick="closeModal();openWalkthrough()">◉ Walkthrough</button></div><h3>Chief of Staff briefing</h3><p>${pending.length} draft(s) awaiting CEO, ${active.length} active task(s), ${overdue.length} overdue. These are summaries of saved records, not independent staff observations.</p><button class="secondary" onclick="v7AIBriefing()">✦ Generate AI Executive Briefing</button>`)}
+function v7Hub(){let pending=tasks.filter(t=>t.status==='draft'),active=tasks.filter(t=>t.status==='progress');let overdue=active.filter(t=>t.deadline&&t.deadline<new Date().toISOString().slice(0,10));openBox('V7 · CEO Executive Headquarters',`<div class="config-note">Real records from this browser only. Server-side AI draft jobs run in the background while the Railway process stays alive. CEO approval remains required; no external actions or unattended schedules.</div><div class="v5-kpis">${v7Card('Assigned tasks',`<b>${tasks.length}</b>`)}${v7Card('CEO approvals',`<b>${pending.length}</b>`)}${v7Card('Overdue',`<b>${overdue.length}</b>`)}${v7Card('Staff',`<b>${staff.length}</b>`)}</div><div class="inlineactions"><button class="primary" onclick="v7Boardroom()">♙ Executive Boardroom</button><button class="secondary" onclick="showLiveJobs()">◉ Live AI Jobs</button><button class="secondary" onclick="v7Library()">▤ Knowledge Library</button><button class="secondary" onclick="v7Messages()">✉ Staff Messenger</button><button class="secondary" onclick="v7Performance()">▥ Performance</button><button class="secondary" onclick="v7Governance()">⚙ Governance & Backup</button><button class="secondary" onclick="showApprovalDesk()">✓ Approval Desk</button><button class="secondary" onclick="closeModal();openWalkthrough()">◉ Walkthrough</button></div><h3>Chief of Staff briefing</h3><p>${pending.length} draft(s) awaiting CEO, ${active.length} active task(s), ${overdue.length} overdue. These are summaries of saved records, not independent staff observations.</p><button class="secondary" onclick="v7AIBriefing()">✦ Generate AI Executive Briefing</button>`)}
 function v7Boardroom(){openBox('Executive Boardroom · CEO Meeting',`<div class="config-note">AI synthesis: one AI model writes perspectives for your selected staff. It is not six independent agents, and no meeting actions happen automatically.</div>${input('Meeting topic','v7Topic')}${area('CEO agenda and desired outcome','v7Agenda')}<div class="field"><label>Participants</label><div class="checks">${staff.map(s=>`<label><input type="checkbox" class="v7Participant" value="${Number(s.id)}" checked> ${esc(s.name)} · ${esc(s.role)}</label>`).join('')}</div></div><button class="primary" onclick="v7RunMeeting()">✦ Run AI Boardroom</button><h3>Saved minutes (${v7.meetings.length})</h3>${v7.meetings.slice(0,6).map((m,i)=>`<div class="desk-details"><b>${esc(m.topic)}</b><p>${esc(m.date)}</p><button class="secondary" onclick="v7ShowMeeting(${i})">Open minutes</button></div>`).join('')||'<p class="sub">No meetings yet.</p>'}`)}
 function v7ShowMeeting(i){let m=v7.meetings[i];if(!m)return;openBox('Meeting Minutes · '+m.topic,`<p class="sub">${esc(m.date)}</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;color:#e2edfc">${esc(m.result)}</pre><button class="secondary" onclick="v7Boardroom()">Back</button>`)}
 async function v7AuthedPost(path,payload){if(!engineToken&&!(await engineLogin()))return null;let run=()=>fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+engineToken},body:JSON.stringify(payload)});let r=await run();if(r.status===401){engineToken='';if(!(await engineLogin()))return null;r=await run()}if(!r.ok){let e=await r.json().catch(()=>({}));throw Error(typeof e.detail==='string'?e.detail:'AI request failed')}return r.json()}
