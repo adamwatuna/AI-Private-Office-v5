@@ -34,6 +34,18 @@ class Asset(Base):
     content_type=Column(String(150))
     size=Column(Integer,nullable=False)
     stored_name=Column(String(100),nullable=False)
+class AgentJob(Base):
+    __tablename__='agent_jobs'
+    id=Column(String(36),primary_key=True)
+    task_id=Column(String(120),nullable=False,index=True)
+    staff_name=Column(String(120),nullable=False)
+    title=Column(String(200),nullable=False)
+    payload=Column(Text,nullable=False)
+    status=Column(String(30),nullable=False,default='queued')
+    result=Column(Text,nullable=False,default='')
+    error=Column(Text,nullable=False,default='')
+    created_at=Column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
+    updated_at=Column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc))
 Base.metadata.create_all(engine)
 app=FastAPI(title='AI Private Office API',version='1.0.0',docs_url='/api/docs',openapi_url='/api/openapi.json')
 secret=os.getenv('SESSION_SECRET','')
@@ -139,6 +151,83 @@ class AgentRun(BaseModel):
     def valid_instruction(cls,v):
         if not v.strip(): raise ValueError('Instruction required')
         return v
+# V7.2 background draft jobs: actual server-side OpenAI work, never external actions.
+# Single-process beta; queued jobs persist but do not auto-resume across restarts.
+import asyncio
+from fastapi import BackgroundTasks
+from sqlalchemy import func
+job_slots=asyncio.Semaphore(int(os.getenv('MAX_CONCURRENT_AI_JOBS','2')))
+MAX_PENDING=20
+
+def job_view(j):
+    return {'id':j.id,'task_id':j.task_id,'staff_name':j.staff_name,'title':j.title,
+            'status':j.status,'draft':j.result if j.status=='awaiting_ceo' else '',
+            'error':j.error,'created_at':j.created_at.isoformat() if j.created_at else None,
+            'updated_at':j.updated_at.isoformat() if j.updated_at else None}
+
+def update_job(jid, **changes):
+    with Session.begin() as db:
+        j=db.get(AgentJob,jid)
+        if not j:return
+        for key,value in changes.items():setattr(j,key,value)
+        j.updated_at=datetime.now(timezone.utc)
+
+async def run_job(jid):
+    async with job_slots:
+        with Session() as db:
+            j=db.get(AgentJob,jid)
+            if not j or j.status!='queued':return
+            payload=json.loads(j.payload)
+        update_job(jid,status='working')
+        try:
+            data=AgentRun.model_validate(payload)
+            # Calls the existing guarded draft generator. No third-party write permissions.
+            result=await generate_draft(data,True)
+            update_job(jid,status='awaiting_ceo',result=result['draft'])
+        except Exception:
+            update_job(jid,status='failed',error='AI draft generation failed; check Railway logs')
+
+@app.post('/api/jobs',status_code=202)
+async def queue_job(data:AgentRun,_=Depends(auth)):
+    if not os.getenv('OPENAI_API_KEY'):raise HTTPException(503,'OPENAI_API_KEY not configured')
+    with Session.begin() as db:
+        pending=db.query(AgentJob).filter(AgentJob.status.in_(['queued','working'])).count()
+        if pending>=MAX_PENDING:raise HTTPException(429,'Job queue is full')
+        j=AgentJob(id=str(uuid.uuid4()),task_id=data.task_id,staff_name=data.staff_name,title=data.title,
+                   payload=data.model_dump_json(),status='queued')
+        db.add(j)
+        jid=j.id
+    asyncio.create_task(run_job(jid))
+    return {'id':jid,'status':'queued'}
+
+@app.get('/api/jobs')
+def list_jobs(_=Depends(auth)):
+    with Session() as db:
+        return [job_view(j) for j in db.query(AgentJob).order_by(AgentJob.created_at.desc()).limit(100)]
+
+@app.get('/api/jobs/{job_id}')
+def get_job(job_id:str,_=Depends(auth)):
+    with Session() as db:
+        j=db.get(AgentJob,job_id)
+        if not j:raise HTTPException(404,'Job not found')
+        return job_view(j)
+
+@app.post('/api/jobs/{job_id}/dismiss')
+def dismiss_job(job_id:str,_=Depends(auth)):
+    with Session.begin() as db:
+        j=db.get(AgentJob,job_id)
+        if not j:raise HTTPException(404,'Job not found')
+        if j.status in ('queued','working'):raise HTTPException(409,'Job is still processing')
+        j.status='closed';j.result='';j.updated_at=datetime.now(timezone.utc)
+    return {'ok':True}
+
+@app.on_event('startup')
+def mark_interrupted_jobs():
+    # Explicit failure on restart rather than falsely showing jobs still running.
+    with Session.begin() as db:
+        for j in db.query(AgentJob).filter(AgentJob.status.in_(['queued','working'])):
+            j.status='interrupted';j.error='Server restarted; requeue this task from CEO dashboard'
+
 @app.post('/api/engine/draft')
 async def generate_draft(data:AgentRun,_=Depends(auth)):
     if not os.getenv('OPENAI_API_KEY'):
