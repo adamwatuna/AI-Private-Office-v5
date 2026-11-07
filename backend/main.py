@@ -200,6 +200,36 @@ def get_snapshot(_=Depends(auth)):
             if r.kind in KINDS[3:]:result['intelligence'][r.kind].append(item)
             elif r.kind in result:result[r.kind].append(item)
     return result
+# Phase 1B: one-time, fail-closed initialization of an EMPTY snapshot namespace.
+# Existing memory, job and asset tables are never touched.
+@app.post('/api/snapshot/initialize',status_code=201)
+def initialize_snapshot(data:Snapshot,_=Depends(auth)):
+    incoming={'staff':data.staff,'tasks':data.tasks,'activity':data.activity[:60]}
+    incoming.update({k:data.intelligence.get(k,[]) for k in KINDS[3:]})
+    if not incoming['staff']:
+        raise HTTPException(422,'At least one staff record required')
+    if sum(map(len,incoming.values()))>10000:
+        raise HTTPException(413,'Too many records')
+    # Prevalidate before opening transaction; avoid partial writes and duplicate IDs.
+    prepared=[]
+    for kind,items in incoming.items():
+        seen=set()
+        for index,item in enumerate(items):
+            payload=json.dumps(item,ensure_ascii=False,sort_keys=True)
+            if len(payload)>200000:raise HTTPException(413,'Record too large')
+            ident=str(item.get('id',index)) if kind!='activity' else str(index)
+            if ident in seen:raise HTTPException(422,'Duplicate '+kind+' ID: '+ident[:60])
+            seen.add(ident)
+            prepared.append(Record(kind=kind,public_id=ident,payload=payload))
+    with Session.begin() as db:
+        # Lock snapshot namespace on PostgreSQL so concurrent initializations cannot race.
+        if db.bind.dialect.name=='postgresql':
+            db.execute(__import__('sqlalchemy').text('SELECT pg_advisory_xact_lock(714735120)'))
+        if db.query(Record).filter(Record.kind.in_(KINDS)).first():
+            raise HTTPException(409,'Snapshot database is not empty. Nothing imported.')
+        db.add_all(prepared)
+    return {'ok':True,'counts':{kind:len(items) for kind,items in incoming.items()}}
+
 @app.put('/api/snapshot')
 def put_snapshot(data:Snapshot,_=Depends(auth)):
     # Single CEO workspace: transactional replacement. Do not expose this endpoint to untrusted users.
