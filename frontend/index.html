@@ -351,7 +351,40 @@ async function phase1aCompareSnapshot(){
    '<p>Next step: review record-level differences and an explicit migration plan before enabling any write.</p>');
  }catch(error){alert('Read-only inspection could not finish: '+error.message)}
 }
-function v7Governance(){openBox('Governance · CEO Controls',`<div class="config-note">Security notice: V7 is a development starter. CEO password and signed session protect backend AI endpoints, but staff permissions, MFA, secure document vault, audit-grade logging and external integrations are NOT implemented.</div><h3>Cloud Sync · Phase 1A</h3><p class="config-note">Read-only browser/database inspection. No data will be changed.</p><button class="secondary" onclick="phase1aCompareSnapshot()">Compare browser vs database (read-only)</button><h3>Approval policy</h3>${area('CEO approval policy (reference only)','v7Policy',v7.policies.approval)}<button class="primary" onclick="v7.policies.approval=$('v7Policy').value.slice(0,1500);v7Save();v7Governance()">Save policy note</button><h3>Local data backup</h3><p class="sub">Export/import browser records to move devices or make a manual backup. Backup contains staff profiles, tasks and notes. Keep it private.</p><button class="secondary" onclick="v7Export()">↓ Export V7 backup JSON</button><div class="field"><label>Restore V7 backup</label><input type="file" accept=".json,application/json" id="v7Backup" onchange="v7Import(this)"></div><p class="hint">Railway database persistence requires a persistent volume or managed database; browser backups do not replace server backups.</p>`)}
+// Phase 1B: explicit, one-time upload to EMPTY database only. No automatic sync.
+async function phase1bInitializeSnapshot(){
+ if(!engineToken && !(await engineLogin()))return;
+ const local={staff:JSON.parse(JSON.stringify(staff)),tasks:JSON.parse(JSON.stringify(tasks)),activity:JSON.parse(JSON.stringify(activity)),intelligence:JSON.parse(JSON.stringify(intelligence))};
+ const groups=['staff','tasks','activity','news','planning','analysis','ideas'];
+ const count=(source,g)=>Array.isArray(['staff','tasks','activity'].includes(g)?source[g]:source.intelligence?.[g])?(['staff','tasks','activity'].includes(g)?source[g]:source.intelligence[g]).length:0;
+ if(!local.staff.length)return alert('No browser staff records found. Import cancelled.');
+ try{
+  const authHeaders={Authorization:'Bearer '+engineToken};
+  const before=await fetch('/api/snapshot',{headers:authHeaders,cache:'no-store'});
+  if(!before.ok)throw Error('Database preflight failed (HTTP '+before.status+'). No changes made.');
+  const remote=await before.json();
+  if(groups.some(g=>count(remote,g)!==0))throw Error('Database contains snapshot records. Import cancelled to protect data.');
+  // Save an extra full browser backup before prompting; backup is not a database backup.
+  v7Export();
+  const response=prompt('A browser backup was downloaded. Check it is saved. To import '+local.staff.length+' staff, '+local.tasks.length+' tasks and '+local.activity.length+' activity records into the EMPTY staging database, type exactly: INITIALIZE STAGING');
+  if(response!=='INITIALIZE STAGING')return;
+  const put=await fetch('/api/snapshot/initialize',{method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify(local)});
+  if(!put.ok){let detail='';try{detail=(await put.json()).detail||''}catch(e){}throw Error('Initialization rejected (HTTP '+put.status+'): '+detail)}
+  const after=await fetch('/api/snapshot',{headers:authHeaders,cache:'no-store'});
+  if(!after.ok)throw Error('Import submitted, but verification read failed. Do not retry automatically.');
+  const saved=await after.json();
+  const stable=(v)=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
+  const normalize=(xs)=>JSON.stringify((xs||[]).map(x=>JSON.stringify(stable(x))).sort());
+  const mismatches=groups.filter(g=>{
+   const a=['staff','tasks','activity'].includes(g)?local[g]:local.intelligence?.[g];
+   const b=['staff','tasks','activity'].includes(g)?saved[g]:saved.intelligence?.[g];
+   return normalize(a)!==normalize(b);
+  });
+  if(mismatches.length)throw Error('Database read-back differs for '+mismatches.join(', ')+'. Stop and investigate; do not retry.');
+  openBox('Phase 1B · Initialization verified','<p>Browser snapshot imported to staging database and read-back content verified for all seven record groups.</p><p>Automatic sync is still OFF. Existing browser data is unchanged. Do not use this as a full database backup.</p>');
+ }catch(e){alert('Phase 1B: '+e.message)}
+}
+function v7Governance(){openBox('Governance · CEO Controls',`<div class="config-note">Security notice: V7 is a development starter. CEO password and signed session protect backend AI endpoints, but staff permissions, MFA, secure document vault, audit-grade logging and external integrations are NOT implemented.</div><h3>Cloud Sync · Phase 1A</h3><p class="config-note">Read-only browser/database inspection. No data will be changed.</p><button class="secondary" onclick="phase1aCompareSnapshot()">Compare browser vs database (read-only)</button><h3>Cloud Migration · Phase 1B (staging only)</h3><p class="config-note">One-time initialization. Downloads browser backup, checks empty database, requires typed confirmation, then verifies read-back. No automatic sync.</p><button class="secondary" onclick="phase1bInitializeSnapshot()">Initialize EMPTY staging snapshot (manual)</button><h3>Approval policy</h3>${area('CEO approval policy (reference only)','v7Policy',v7.policies.approval)}<button class="primary" onclick="v7.policies.approval=$('v7Policy').value.slice(0,1500);v7Save();v7Governance()">Save policy note</button><h3>Local data backup</h3><p class="sub">Export/import browser records to move devices or make a manual backup. Backup contains staff profiles, tasks and notes. Keep it private.</p><button class="secondary" onclick="v7Export()">↓ Export V7 backup JSON</button><div class="field"><label>Restore V7 backup</label><input type="file" accept=".json,application/json" id="v7Backup" onchange="v7Import(this)"></div><p class="hint">Railway database persistence requires a persistent volume or managed database; browser backups do not replace server backups.</p>`)}
 function v7Export(){let data={format:'AI_PRIVATE_OFFICE_V7_BACKUP',version:1,created:new Date().toISOString(),staff,tasks,activity,intelligence,v7};downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'ai-private-office-v7-backup.json')}
 async function v7Import(el){let f=el.files[0];if(!f)return;if(f.size>5*1024*1024)return alert('Backup too large');try{let data=JSON.parse(await f.text());if(data.format!=='AI_PRIVATE_OFFICE_V7_BACKUP'||!Array.isArray(data.staff)||!Array.isArray(data.tasks)||!Array.isArray(data.activity))throw Error('Invalid backup');if(!confirm('Restore will overwrite current browser staff, tasks, activity and V7 notes. Continue?'))return;staff=data.staff;tasks=data.tasks;activity=data.activity;v7=data.v7||v7;intelligence=data.intelligence||intelligence;save();v7Save();localStorage.setItem(intelKey,JSON.stringify(intelligence));renderAll();v7Hub();alert('Backup restored in this browser')}catch(e){alert('Could not restore backup: '+e.message)}}
 
