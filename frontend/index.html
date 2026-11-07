@@ -384,7 +384,65 @@ async function phase1bInitializeSnapshot(){
   openBox('Phase 1B · Initialization verified','<p>Browser snapshot imported to staging database and read-back content verified for all seven record groups.</p><p>Automatic sync is still OFF. Existing browser data is unchanged. Do not use this as a full database backup.</p>');
  }catch(e){alert('Phase 1B: '+e.message)}
 }
-function v7Governance(){openBox('Governance · CEO Controls',`<div class="config-note">Security notice: V7 is a development starter. CEO password and signed session protect backend AI endpoints, but staff permissions, MFA, secure document vault, audit-grade logging and external integrations are NOT implemented.</div><h3>Cloud Sync · Phase 1A</h3><p class="config-note">Read-only browser/database inspection. No data will be changed.</p><button class="secondary" onclick="phase1aCompareSnapshot()">Compare browser vs database (read-only)</button><h3>Cloud Migration · Phase 1B (staging only)</h3><p class="config-note">One-time initialization. Downloads browser backup, checks empty database, requires typed confirmation, then verifies read-back. No automatic sync.</p><button class="secondary" onclick="phase1bInitializeSnapshot()">Initialize EMPTY staging snapshot (manual)</button><h3>Approval policy</h3>${area('CEO approval policy (reference only)','v7Policy',v7.policies.approval)}<button class="primary" onclick="v7.policies.approval=$('v7Policy').value.slice(0,1500);v7Save();v7Governance()">Save policy note</button><h3>Local data backup</h3><p class="sub">Export/import browser records to move devices or make a manual backup. Backup contains staff profiles, tasks and notes. Keep it private.</p><button class="secondary" onclick="v7Export()">↓ Export V7 backup JSON</button><div class="field"><label>Restore V7 backup</label><input type="file" accept=".json,application/json" id="v7Backup" onchange="v7Import(this)"></div><p class="hint">Railway database persistence requires a persistent volume or managed database; browser backups do not replace server backups.</p>`)}
+// Phase 1C: explicit manual sync only. No background uploads or auto-loading.
+const phase1cGroups=['staff','tasks','activity','news','planning','analysis','ideas'];
+function phase1cSnapshot(){return JSON.parse(JSON.stringify({staff,tasks,activity,intelligence}));}
+function phase1cGroup(s,g){return ['staff','tasks','activity'].includes(g)?(s[g]||[]):(s.intelligence?.[g]||[]);}
+function phase1cCanon(v){return Array.isArray(v)?v.map(phase1cCanon):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,phase1cCanon(v[k])])):v;}
+function phase1cSame(a,b){return JSON.stringify((a||[]).map(x=>JSON.stringify(phase1cCanon(x))).sort())===JSON.stringify((b||[]).map(x=>JSON.stringify(phase1cCanon(x))).sort());}
+async function phase1cRead(){
+ if(!engineToken&&!(await engineLogin()))throw Error('CEO login required');
+ let r=await fetch('/api/snapshot/versioned',{headers:{Authorization:'Bearer '+engineToken},cache:'no-store'});
+ if(r.status===401){engineToken='';if(!(await engineLogin()))throw Error('Login cancelled');r=await fetch('/api/snapshot/versioned',{headers:{Authorization:'Bearer '+engineToken},cache:'no-store'});}
+ if(!r.ok)throw Error('Versioned snapshot unavailable (HTTP '+r.status+')');
+ return r.json();
+}
+let phase1cInspection=null;
+async function phase1cInspect(){
+ try{
+  const remote=await phase1cRead(),local=phase1cSnapshot();
+  phase1cInspection={etag:remote.etag,local,remote:remote.snapshot};
+  const rows=phase1cGroups.map(g=>{const a=phase1cGroup(local,g),b=phase1cGroup(remote.snapshot,g);return '<tr><td>'+esc(g)+'</td><td>'+a.length+'</td><td>'+b.length+'</td><td>'+(phase1cSame(a,b)?'MATCH':'DIFFERENT')+'</td></tr>';}).join('');
+  openBox('Phase 1C · Manual cloud sync','<div class="config-note">No changes yet. Both actions below require explicit confirmation. Browser backup is downloaded before replacing browser data or writing database data. Automatic sync is OFF.</div><table style="width:100%;text-align:left"><thead><tr><th>Group</th><th>Browser</th><th>Cloud</th><th>Content</th></tr></thead><tbody>'+rows+'</tbody></table><p>Choose carefully: upload replaces the seven cloud snapshot groups; download replaces the seven browser snapshot groups. Neither affects Memory Vault, AI jobs, files or V7 reference notes.</p><div class="inlineactions"><button class="secondary" onclick="phase1cDownload()">↓ Download cloud to this browser</button><button class="secondary" onclick="phase1cUpload()">↑ Upload browser to cloud</button><button class="secondary" onclick="phase1cInspect()">Refresh comparison</button></div>');
+ }catch(e){alert('Phase 1C inspection: '+e.message)}
+}
+async function phase1cDownload(){
+ try{
+  if(!phase1cInspection)throw Error('Run comparison first');
+  const fresh=await phase1cRead();
+  if(fresh.etag!==phase1cInspection.etag)throw Error('Cloud changed. Refresh comparison before download.');
+  const remote=fresh.snapshot;
+  if(!Array.isArray(remote.staff)||!remote.staff.length)throw Error('Cloud has no staff. Download cancelled.');
+  v7Export();
+  if(prompt('Browser backup downloaded. Verify it exists. To REPLACE browser snapshot with cloud records, type: DOWNLOAD CLOUD')!=='DOWNLOAD CLOUD')return;
+  // No await between confirmation and local replacement; do not change V7 notes.
+  staff=JSON.parse(JSON.stringify(remote.staff));tasks=JSON.parse(JSON.stringify(remote.tasks));activity=JSON.parse(JSON.stringify(remote.activity));
+  intelligence=JSON.parse(JSON.stringify(remote.intelligence));
+  for(const g of ['news','planning','analysis','ideas'])if(!Array.isArray(intelligence[g]))intelligence[g]=[];
+  save();intelSave();renderAll();phase1cInspection=null;
+  openBox('Phase 1C · Browser updated','<p>Cloud snapshot loaded into this browser. Your browser backup was downloaded first. Automatic sync remains OFF.</p>');
+ }catch(e){alert('Download cancelled: '+e.message)}
+}
+async function phase1cUpload(){
+ try{
+  if(!phase1cInspection)throw Error('Run comparison first');
+  const local=phase1cSnapshot();
+  for(const g of phase1cGroups)if(!phase1cSame(phase1cGroup(local,g),phase1cGroup(phase1cInspection.local,g)))throw Error('Browser changed after comparison. Refresh first.');
+  const fresh=await phase1cRead();
+  if(fresh.etag!==phase1cInspection.etag)throw Error('Cloud changed. Refresh comparison before upload.');
+  v7Export();
+  // Also download the cloud snapshot as a separate recovery artifact.
+  downloadBlob(new Blob([JSON.stringify({format:'AI_PRIVATE_OFFICE_PHASE1C_CLOUD_BACKUP',created:new Date().toISOString(),snapshot:fresh.snapshot},null,2)],{type:'application/json'}),'ai-private-office-staging-cloud-before-upload.json');
+  if(prompt('Verify BOTH browser and cloud backup files were downloaded. Upload will replace the seven cloud snapshot groups. Type: UPLOAD STAGING')!=='UPLOAD STAGING')return;
+  const r=await fetch('/api/snapshot/compare-and-swap',{method:'POST',headers:{Authorization:'Bearer '+engineToken,'Content-Type':'application/json'},body:JSON.stringify({expected_etag:fresh.etag,snapshot:local})});
+  if(!r.ok){let d=await r.json().catch(()=>({}));throw Error('Upload rejected (HTTP '+r.status+'): '+(d.detail||'unknown error'));}
+  const verified=await phase1cRead();
+  if(phase1cGroups.some(g=>!phase1cSame(phase1cGroup(local,g),phase1cGroup(verified.snapshot,g))))throw Error('Upload accepted but read-back differs. Stop and investigate.');
+  phase1cInspection=null;
+  openBox('Phase 1C · Upload verified','<p>Cloud snapshot updated and all seven groups verified by read-back. Automatic sync is still OFF.</p>');
+ }catch(e){alert('Upload stopped: '+e.message)}
+}
+function v7Governance(){openBox('Governance · CEO Controls',`<div class="config-note">Security notice: V7 is a development starter. CEO password and signed session protect backend AI endpoints, but staff permissions, MFA, secure document vault, audit-grade logging and external integrations are NOT implemented.</div><h3>Cloud Sync · Phase 1A</h3><p class="config-note">Read-only browser/database inspection. No data will be changed.</p><button class="secondary" onclick="phase1aCompareSnapshot()">Compare browser vs database (read-only)</button><h3>Cloud Migration · Phase 1B (staging only)</h3><p class="config-note">One-time initialization. Downloads browser backup, checks empty database, requires typed confirmation, then verifies read-back. No automatic sync.</p><button class="secondary" onclick="phase1bInitializeSnapshot()">Initialize EMPTY staging snapshot (manual)</button><h3>Cloud Sync · Phase 1C (manual, staging only)</h3><p class="config-note">Compare all seven record groups, then explicitly upload or download with backups and conflict protection. Automatic sync remains OFF.</p><button class="secondary" onclick="phase1cInspect()">Compare &amp; manual sync (Phase 1C)</button><h3>Approval policy</h3>${area('CEO approval policy (reference only)','v7Policy',v7.policies.approval)}<button class="primary" onclick="v7.policies.approval=$('v7Policy').value.slice(0,1500);v7Save();v7Governance()">Save policy note</button><h3>Local data backup</h3><p class="sub">Export/import browser records to move devices or make a manual backup. Backup contains staff profiles, tasks and notes. Keep it private.</p><button class="secondary" onclick="v7Export()">↓ Export V7 backup JSON</button><div class="field"><label>Restore V7 backup</label><input type="file" accept=".json,application/json" id="v7Backup" onchange="v7Import(this)"></div><p class="hint">Railway database persistence requires a persistent volume or managed database; browser backups do not replace server backups.</p>`)}
 function v7Export(){let data={format:'AI_PRIVATE_OFFICE_V7_BACKUP',version:1,created:new Date().toISOString(),staff,tasks,activity,intelligence,v7};downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'ai-private-office-v7-backup.json')}
 async function v7Import(el){let f=el.files[0];if(!f)return;if(f.size>5*1024*1024)return alert('Backup too large');try{let data=JSON.parse(await f.text());if(data.format!=='AI_PRIVATE_OFFICE_V7_BACKUP'||!Array.isArray(data.staff)||!Array.isArray(data.tasks)||!Array.isArray(data.activity))throw Error('Invalid backup');if(!confirm('Restore will overwrite current browser staff, tasks, activity and V7 notes. Continue?'))return;staff=data.staff;tasks=data.tasks;activity=data.activity;v7=data.v7||v7;intelligence=data.intelligence||intelligence;save();v7Save();localStorage.setItem(intelKey,JSON.stringify(intelligence));renderAll();v7Hub();alert('Backup restored in this browser')}catch(e){alert('Could not restore backup: '+e.message)}}
 
