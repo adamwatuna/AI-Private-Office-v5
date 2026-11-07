@@ -230,6 +230,61 @@ def initialize_snapshot(data:Snapshot,_=Depends(auth)):
         db.add_all(prepared)
     return {'ok':True,'counts':{kind:len(items) for kind,items in incoming.items()}}
 
+# Phase 1C: optimistic concurrency control for explicit, manual snapshot writes.
+# Only the seven snapshot kinds are affected; memories, jobs and assets are untouched.
+def snapshot_from_rows(rows):
+    result={'staff':[],'tasks':[],'activity':[],'intelligence':{k:[] for k in KINDS[3:]}}
+    for r in rows:
+        item=json.loads(r.payload)
+        if r.kind in KINDS[3:]:result['intelligence'][r.kind].append(item)
+        elif r.kind in result:result[r.kind].append(item)
+    return result
+
+def snapshot_etag(rows):
+    # Sort by kind and public_id so ordering of DB query results cannot change the hash.
+    canonical=[(r.kind,r.public_id,json.loads(r.payload)) for r in rows]
+    canonical.sort(key=lambda x:(x[0],x[1]))
+    return hashlib.sha256(json.dumps(canonical,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+
+class SnapshotCAS(BaseModel):
+    expected_etag:str=Field(min_length=64,max_length=64)
+    snapshot:Snapshot
+
+@app.get('/api/snapshot/versioned')
+def get_versioned_snapshot(_=Depends(auth)):
+    with Session() as db:
+        rows=db.query(Record).filter(Record.kind.in_(KINDS)).all()
+        return {'snapshot':snapshot_from_rows(rows),'etag':snapshot_etag(rows)}
+
+@app.post('/api/snapshot/compare-and-swap')
+def cas_snapshot(data:SnapshotCAS,_=Depends(auth)):
+    incoming={'staff':data.snapshot.staff,'tasks':data.snapshot.tasks,'activity':data.snapshot.activity[:60]}
+    incoming.update({k:data.snapshot.intelligence.get(k,[]) for k in KINDS[3:]})
+    if not incoming['staff']:raise HTTPException(422,'Staff records cannot be empty')
+    if sum(map(len,incoming.values()))>10000:raise HTTPException(413,'Too many records')
+    prepared=[]
+    for kind,items in incoming.items():
+        seen=set()
+        for index,item in enumerate(items):
+            payload=json.dumps(item,sort_keys=True,ensure_ascii=False)
+            if len(payload)>200000:raise HTTPException(413,'Record too large')
+            ident=str(item.get('id',index)) if kind!='activity' else str(index)
+            if len(ident)>120 or ident in seen:raise HTTPException(422,'Invalid or duplicate record ID')
+            seen.add(ident)
+            prepared.append(Record(kind=kind,public_id=ident,payload=payload))
+    with Session.begin() as db:
+        if db.bind.dialect.name=='postgresql':
+            db.execute(__import__('sqlalchemy').text('SELECT pg_advisory_xact_lock(714735120)'))
+        rows=db.query(Record).filter(Record.kind.in_(KINDS)).all()
+        if not hmac.compare_digest(snapshot_etag(rows),data.expected_etag):
+            raise HTTPException(409,'Database changed since last read. Nothing saved. Recompare first.')
+        db.query(Record).filter(Record.kind.in_(KINDS)).delete(synchronize_session=False)
+        db.add_all(prepared)
+        db.flush()
+        next_rows=db.query(Record).filter(Record.kind.in_(KINDS)).all()
+        next_etag=snapshot_etag(next_rows)
+    return {'ok':True,'etag':next_etag}
+
 @app.put('/api/snapshot')
 def put_snapshot(data:Snapshot,_=Depends(auth)):
     # Single CEO workspace: transactional replacement. Do not expose this endpoint to untrusted users.
