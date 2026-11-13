@@ -69,11 +69,15 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .ceo-panel{right:12px;top:10px;width:185px;background:rgba(10,16,28,.92)}
 .office-legend{border-left:3px solid #d7b56b;padding-left:10px}
 @media(max-width:850px){.office{min-height:950px;background-size:cover;background-position:center}.staff{width:43%;min-height:115px}.s1{left:4%;top:22%}.s2{left:53%;top:22%}.s3{left:4%;top:42%}.s4{left:53%;top:42%}.s5{left:4%;top:63%}.s6{left:53%;top:63%}.ceo-panel{top:8px;right:8px;width:175px}.office-title{max-width:45%}}
+
+/* V8 Executive Edition: additive, non-destructive visual shell */
+body.v8-mode{background:#f5f7fb;color:#192a43}body.v8-mode .sidebar{background:#fff!important;color:#243653!important;border-right:1px solid #e4eaf2}body.v8-mode .sidebar .nav{color:#42536d!important}body.v8-mode .sidebar .nav:hover,body.v8-mode .sidebar .nav.active{background:#eaf1fc!important;color:#173b74!important}body.v8-mode .brand{color:#173b74!important}body.v8-mode .main{background:#f5f7fb!important;color:#182b43!important}body.v8-mode .top{background:#fff;border:1px solid #e5eaf2;border-radius:18px;padding:18px 22px;margin-bottom:20px}body.v8-mode .top h1{color:#172d4a!important}body.v8-mode .top .sub{color:#6c7d91!important}
+.v8-dashboard{padding:0 0 40px;color:#21324a;font-family:inherit}.v8-eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#5b75a1;font-weight:800}.v8-hero{background:linear-gradient(115deg,#fff,#e9f0fb);border:1px solid #e1e8f4;border-radius:24px;padding:30px;margin-bottom:20px;display:flex;justify-content:space-between;gap:20px;align-items:center}.v8-hero h2{font-size:clamp(25px,3vw,40px);margin:8px 0;color:#132b4e}.v8-hero p{color:#64748b;max-width:640px}.v8-button{background:#1b477f!important;color:white!important;border:0!important;border-radius:10px;padding:11px 15px;cursor:pointer}.v8-secondary{background:#fff!important;color:#1b477f!important;border:1px solid #d3deeb!important;border-radius:10px;padding:11px 15px;cursor:pointer}.v8-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin:20px 0}.v8-stat,.v8-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:20px;box-shadow:0 4px 16px #17365a08}.v8-stat b{display:block;font-size:32px;color:#1b477f;margin:10px 0 2px}.v8-stat span,.v8-card p{color:#66778c;font-size:13px}.v8-section{font-size:20px;margin:26px 0 14px;color:#193657}.v8-modules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.v8-card h3{color:#203b5c;margin:10px 0}.v8-pill{display:inline-block;border-radius:30px;padding:5px 9px;background:#eef3fa;color:#4b6483;font-size:11px;font-weight:700}.v8-pill.live{background:#e4f7ed;color:#15744c}.v8-card button{margin-top:10px}.v8-list{display:grid;gap:10px}.v8-person{padding:12px;border-radius:12px;border:1px solid #e7edf5;display:flex;justify-content:space-between;align-items:center}.v8-person small{color:#78899d}.v8-disclaimer{font-size:12px;color:#718096;margin:16px 0}.v8-actions{display:flex;gap:10px;flex-wrap:wrap}@media(max-width:1050px){.v8-grid{grid-template-columns:repeat(2,1fr)}.v8-modules{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.v8-grid,.v8-modules{grid-template-columns:1fr}.v8-hero{display:block;padding:20px}.v8-dashboard{padding:0 4px}}
 </style></head>
 <body>
 <div class="app">
 <aside class="sidebar"><div class="brand">✦ AI PRIVATE OFFICE<small>Your personal AI workforce</small></div>
-<button class="nav" onclick="v7Hub()">✦ &nbsp; V7 Executive HQ</button><button class="nav active" data-page="office" onclick="navigate('office')">⌂ &nbsp; Office</button><button class="nav" onclick="openModal('team')">♙ &nbsp; My Staff</button><button class="nav" onclick="switchTab('progress')">▣ &nbsp; Work Progress</button><button class="nav" onclick="switchTab('draft')">☑ &nbsp; Draft Tasks</button><button class="nav" onclick="switchTab('final')">✓ &nbsp; Final Tasks</button><button class="nav" onclick="openModal('observe')">◉ &nbsp; CEO Observation</button><button class="nav" onclick="showReports()">▤ &nbsp; Reports</button>
+<button class="nav" onclick="v8Dashboard()">✦ &nbsp; V8 Executive HQ</button><button class="nav" onclick="v7Hub()">✦ &nbsp; V7 Executive HQ</button><button class="nav active" data-page="office" onclick="navigate('office')">⌂ &nbsp; Office</button><button class="nav" onclick="openModal('team')">♙ &nbsp; My Staff</button><button class="nav" onclick="switchTab('progress')">▣ &nbsp; Work Progress</button><button class="nav" onclick="switchTab('draft')">☑ &nbsp; Draft Tasks</button><button class="nav" onclick="switchTab('final')">✓ &nbsp; Final Tasks</button><button class="nav" onclick="openModal('observe')">◉ &nbsp; CEO Observation</button><button class="nav" onclick="showReports()">▤ &nbsp; Reports</button>
 <div class="nav-group-label">CEO INTELLIGENCE</div>
 <button class="nav" data-page="news" onclick="navigate('news')">◈ &nbsp; News</button>
 <button class="nav" data-page="planning" onclick="navigate('planning')">▦ &nbsp; Planning</button>
@@ -96,7 +100,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 <button class="nav" data-page="legacy" onclick="navigate('legacy')">♛ &nbsp; Family Succession</button>
 <div class="ceo">♛ &nbsp; CEO MODE<br><small>Owner access · Approval required</small></div></aside>
 <main class="main"><div class="top"><div><h1>Good morning, CEO.</h1><div class="sub">Your office at a glance. Select a staff member to observe or instruct.</div></div><div class="online">● OFFICE ONLINE</div></div>
-<div id="officePage"><div class="office-actions"><button onclick="v7Hub()">✦ V7 Executive HQ</button><button onclick="v7Boardroom()">♙ Boardroom</button><button onclick="v7Library()">▤ Knowledge Library</button><button onclick="openWalkthrough()">◉ CEO Walkthrough</button><button onclick="showExecutiveBriefing()">▤ Executive Briefing</button><button onclick="showApprovalDesk()">✓ CEO Approval Desk</button><button onclick="openModal('team')">⚙ Manage Staff</button></div><section class="office"><div class="office-title"><strong>AI Private Office · Live Desk View</strong><span>Option A · Interactive six-desk live office</span></div>
+<div id="v8Page" class="v8-dashboard" hidden></div><div id="officePage"><div class="office-actions"><button onclick="v7Hub()">✦ V7 Executive HQ</button><button onclick="v7Boardroom()">♙ Boardroom</button><button onclick="v7Library()">▤ Knowledge Library</button><button onclick="openWalkthrough()">◉ CEO Walkthrough</button><button onclick="showExecutiveBriefing()">▤ Executive Briefing</button><button onclick="showApprovalDesk()">✓ CEO Approval Desk</button><button onclick="openModal('team')">⚙ Manage Staff</button></div><section class="office"><div class="office-title"><strong>AI Private Office · Live Desk View</strong><span>Option A · Interactive six-desk live office</span></div>
 <div class="staff-layer" id="staffLayer"></div>
 <div class="ceo-panel"><h3>CEO CONTROL</h3><button class="action" onclick="openModal('observe')">◉ &nbsp; What can I observe?</button><button class="action" onclick="openModal('instruction')">✉ &nbsp; Give an instruction</button><button class="action" onclick="openModal('team')">＋ &nbsp; Add / manage staff</button><button class="action" onclick="showReports()">▤ &nbsp; Team progress report</button></div></section>
 <div class="office-legend" id="seatLegend">● Occupied = staff assigned · ◇ Vacant = available desk · Live status comes from backend AI jobs after CEO login.</div><div id="expansionSeats" class="expansion-seats" hidden></div>
@@ -106,6 +110,42 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 <section class="workspace panel"><div class="tabs"><button class="tab active" data-tab="progress" onclick="switchTab('progress')">Work Progress</button><button class="tab" data-tab="draft" onclick="switchTab('draft')">Draft · CEO Approval</button><button class="tab" data-tab="final" onclick="switchTab('final')">Final · Downloads</button><button class="tab" onclick="openModal('instruction')">＋ New CEO Instruction</button></div><div id="taskArea"></div></section></div><section id="intelligencePage" class="intelligence-page" hidden></section><section id="v5Page" class="v5-page" hidden></section></main></div>
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h2 id="modalTitle"></h2><button class="close" onclick="closeModal()">×</button></div><div id="modalBody"></div></div></div>
 <script>
+
+// V8 Executive Edition: dashboard reads existing in-memory data; never writes cloud data.
+function v8Dashboard(){
+ document.body.classList.add('v8-mode');
+ ['officePage','intelligencePage','v5Page'].forEach(id=>{let el=document.getElementById(id);if(el)el.hidden=true});
+ let root=document.getElementById('v8Page');root.hidden=false;
+ const active=tasks.filter(t=>t.status==='progress').length;
+ const pending=tasks.filter(t=>t.status==='draft').length;
+ const completed=tasks.filter(t=>t.status==='final').length;
+ const escV8=x=>esc(String(x??''));
+ const cards=[
+ ['01','AI Workforce','Manage existing staff, desk profiles, tasks and CEO approvals.','Open workforce',"v8Go('team')",true],
+ ['02','Knowledge Academy','Existing approved Memory Vault and knowledge library. Video transcription and training pipelines require integration.','Open library',"v8Go('library')",true],
+ ['03','Research & Intelligence','Research and OSINT workspace. External-source verification requires configured data access.','Open research',"v8Go('osint')",true],
+ ['04','Finance & Audit','Finance workspace and reporting. Bank reconciliation and statutory audit are not connected.','Open finance',"v8Go('finance')",true],
+ ['05','Integration Centre','View integration readiness. Social publishing, email, and creative app connections are not yet authorized.','View readiness',"v8Readiness()",false],
+ ['06','Governance & Cloud','Use existing Phase 1C comparison, backup and manual sync. Automatic sync remains disabled.','Open controls',"v8Go('governance')",true]
+ ];
+ root.innerHTML=`<div class="v8-hero"><div><div class="v8-eyebrow">V8 · Executive Edition · Staging preview</div><h2>Your private executive command centre.</h2><p>A premium workspace for CEO oversight, AI workforce management and controlled operations. Your existing records remain intact.</p><div class="v8-actions"><button class="v8-button" onclick="v8Go('instruction')">+ Delegate a task</button><button class="v8-secondary" onclick="v8Go('approval')">Review approvals</button><button class="v8-secondary" onclick="v8Go('office')">Live office</button></div></div><span class="v8-pill">CEO CONTROLLED · NO AUTO-SYNC</span></div>
+ <div class="v8-grid"><div class="v8-stat"><span>AI workforce</span><b>${staff.length}</b><span>Saved staff profiles</span></div><div class="v8-stat"><span>Active tasks</span><b>${active}</b><span>In progress</span></div><div class="v8-stat"><span>CEO approvals</span><b>${pending}</b><span>Drafts awaiting review</span></div><div class="v8-stat"><span>Completed</span><b>${completed}</b><span>Final tasks</span></div></div>
+ <h2 class="v8-section">Executive workspaces</h2><div class="v8-modules">${cards.map(c=>`<div class="v8-card"><span class="v8-pill ${c[5]?'live':''}">${c[5]?'Existing workspace':'Readiness only'}</span><h3>${c[0]} · ${c[1]}</h3><p>${c[2]}</p><button class="v8-secondary" onclick="${c[4]}">${c[3]} →</button></div>`).join('')}</div>
+ <h2 class="v8-section">Your AI leadership team</h2><div class="v8-card"><div class="v8-list">${staff.map(s=>`<div class="v8-person"><div><b>${escV8(s.name)}</b><br><small>${escV8(s.role)}</small></div><span class="v8-pill">${tasks.filter(t=>String(t.assignee)===String(s.id)).length} tasks</span></div>`).join('')}</div></div>
+ <p class="v8-disclaimer">This is an additive V8 dashboard preview. Cloud-first automatic loading, MFA, external integrations, autonomous agents, training ingestion and finance reconciliation are not enabled by this release. No data migration or schema change is performed.</p>`;
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function v8Go(target){
+ if(target==='office'){document.getElementById('v8Page').hidden=true;document.getElementById('officePage').hidden=false;document.body.classList.remove('v8-mode');return}
+ if(target==='team')return openModal('team');
+ if(target==='instruction')return openModal('instruction');
+ if(target==='approval')return showApprovalDesk();
+ if(target==='library')return v7Library();
+ if(target==='governance')return v8Readiness();
+ document.getElementById('v8Page').hidden=true;document.body.classList.remove('v8-mode');navigate(target);
+}
+function v8Readiness(){openBox('V8 · Integration & Governance Readiness',`<p>Phase 1C manual cloud sync is available in existing governance controls. Automatic sync is OFF.</p><p>External email, social publishing, bank access, training transcription and creative app actions are <b>not connected</b>. No OAuth tokens or permissions are configured by this preview.</p><p>CEO approval is required before enabling any external actions.</p><button class="secondary" onclick="closeModal()">Close</button>`)}
+
 const defaults=[
 {id:1,name:'Sarah Wong',role:'Personal Assistant',description:'CEO scheduling, briefings and administrative coordination',status:'Available'},
 {id:2,name:'Daniel Tan',role:'Creative Director',description:'Creative direction, concepts and visual quality',status:'Available'},
