@@ -59,7 +59,7 @@ class OfficeMemory(Base):
     updated_at=Column(DateTime(timezone=True),default=lambda:datetime.now(timezone.utc),nullable=False)
 
 Base.metadata.create_all(engine)
-app=FastAPI(title='AI Private Office API',version='7.3.0-dev',docs_url='/api/docs',openapi_url='/api/openapi.json')
+app=FastAPI(title='AI Private Office API',version='8.0.0-staging-preview',docs_url='/api/docs',openapi_url='/api/openapi.json')
 secret=os.getenv('SESSION_SECRET','')
 password=os.getenv('CEO_PASSWORD','')
 if not secret or not password:
@@ -516,3 +516,16 @@ async def briefing(data:BriefingRequest,_=Depends(auth)):
 @app.get('/api')
 def api_root():return {'service':'AI Private Office','docs':'/api/docs'}
 app.mount('/',StaticFiles(directory=str(BASE/'frontend'),html=True),name='frontend')
+
+
+# V8 readiness is descriptive, not an integration or permission grant.
+@app.get('/api/v8/readiness')
+def v8_readiness(_=Depends(auth)):
+    return {'edition':'V8 Executive Edition','release':'staging-preview',
+            'cloud_sync':'manual_only','automatic_sync':False,
+            'features':{'workforce':'existing','task_approvals':'existing',
+                        'memory_vault':'existing','versioned_snapshot':'existing',
+                        'learning_ingestion':'not_connected','external_integrations':'not_connected',
+                        'mfa':'not_implemented','finance_reconciliation':'not_connected',
+                        'autonomous_actions':'disabled'},
+            'production_approved':False}
